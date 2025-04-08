@@ -12,9 +12,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"encoding/base64"
 
+	"github.com/anyisalin/mcp-openapi-to-mcp-adapter/db/mongo"
+	"github.com/anyisalin/mcp-openapi-to-mcp-adapter/repositories"
+	"github.com/anyisalin/mcp-openapi-to-mcp-adapter/services"
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -69,6 +73,7 @@ type SSEServer struct {
 	contextFunc     SSEContextFunc
 	debugMode       bool   // Flag to enable/disable debug logging
 	logPrefix       string // Prefix for log messages
+	configLoader    ConfigLoader
 }
 
 // SSEOption defines a function type for configuring SSEServer
@@ -148,6 +153,13 @@ func WithDebugMode(debug bool) SSEOption {
 func WithLogPrefix(prefix string) SSEOption {
 	return func(s *SSEServer) {
 		s.logPrefix = prefix
+	}
+}
+
+// WithConfigLoader sets the ConfigLoader for the SSEServer
+func WithConfigLoader(loader ConfigLoader) SSEOption {
+	return func(s *SSEServer) {
+		s.configLoader = loader
 	}
 }
 
@@ -704,6 +716,12 @@ func (s *SSEServer) parseRequestParams(r *http.Request) RequestParams {
 		Headers: make(map[string]string),
 	}
 
+	// Check if we have schema bytes in the context (added by SSEConfigController)
+	if schemaBytes, ok := r.Context().Value(schemaBytesContextKey{}).([]byte); ok && len(schemaBytes) > 0 {
+		// Use schema bytes from context
+		params.RawBytes = schemaBytes
+	}
+
 	// Check if we have a base64 encoded 'code' parameter
 	if encodedParams := query.Get("code"); encodedParams != "" {
 		// Decode base64 string
@@ -764,8 +782,8 @@ func (s *SSEServer) parseRequestParams(r *http.Request) RequestParams {
 		}
 	}
 
-	// Load schema content if provided
-	if params.SchemaURL != "" {
+	// If schema bytes are not already set from context and we have a schema URL, load the schema
+	if len(params.RawBytes) == 0 && params.SchemaURL != "" {
 		var err error
 		// Check if schemaURL is a local file or a URL
 		if strings.HasPrefix(params.SchemaURL, "http://") || strings.HasPrefix(params.SchemaURL, "https://") {
@@ -799,6 +817,87 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ssePath := s.CompleteSsePath()
 	if ssePath != "" && path == ssePath {
 		s.logMessage("[REQUEST] SSE connection request from %s", r.RemoteAddr)
+
+		// Check if configId is provided - this is for backward compatibility with /sse/config endpoint
+		configID := r.URL.Query().Get("configId")
+		if configID != "" {
+			s.logMessage("[CONFIG ID] Using config ID: %s", configID)
+			
+			// Get the database client from context
+			mongoClient, err := mongo.GetDefaultClient()
+			if err != nil {
+				s.logMessage("[ERROR] Failed to get MongoDB client: %v", err)
+				http.Error(w, fmt.Sprintf("Failed to get MongoDB client: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			// Create repository and service
+			sseConfigRepo, err := repositories.NewSSEConfigRepository(mongoClient)
+			if err != nil {
+				s.logMessage("[ERROR] Failed to create SSE config repository: %v", err)
+				http.Error(w, fmt.Sprintf("Failed to create SSE config repository: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			sseConfigService := services.NewSSEConfigService(sseConfigRepo)
+			
+			// Get the configuration from database
+			config, err := sseConfigService.GetByID(r.Context(), configID)
+			if err != nil {
+				s.logMessage("[ERROR] Failed to get configuration: %v", err)
+				http.Error(w, fmt.Sprintf("Failed to get configuration: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			// Get schema content
+			schemaBytes, err := sseConfigService.GetSchemaBytes(config.SchemaURL)
+			if err != nil {
+				s.logMessage("[ERROR] Failed to get schema content: %v", err)
+				http.Error(w, fmt.Sprintf("Failed to get schema content: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			// Create a new context with the schema bytes
+			ctx := context.WithValue(r.Context(), schemaBytesContextKey{}, schemaBytes)
+			r = r.WithContext(ctx)
+			
+			// Set parameters in the query
+			q := r.URL.Query()
+			q.Set("s", config.SchemaURL)
+			q.Set("u", config.BaseURL)
+			
+			// Convert headers to JSON
+			headersJSON, err := json.Marshal(config.Headers)
+			if err == nil {
+				q.Set("h", string(headersJSON))
+			}
+			
+			// Add filters if any
+			for _, filter := range config.Filters {
+				q.Add("f", filter)
+			}
+			
+			// Create an encoded parameters object
+			paramsObj := map[string]interface{}{
+				"s": config.SchemaURL,
+				"u": config.BaseURL,
+				"h": config.Headers,
+			}
+			
+			if len(config.Filters) > 0 {
+				paramsObj["f"] = strings.Join(config.Filters, ";")
+			}
+			
+			// Encode the params as JSON and then base64
+			paramsJSON, _ := json.Marshal(paramsObj)
+			encodedParams := base64.StdEncoding.EncodeToString(paramsJSON)
+			
+			// Add the encoded params as 'code' param
+			q.Set("code", encodedParams)
+			
+			// Set the modified query
+			r.URL.RawQuery = q.Encode()
+		}
 
 		// Parse request parameters
 		params := s.parseRequestParams(r)
@@ -950,7 +1049,13 @@ func createErrorResponse(
 
 func getSchemaURL(schemaURL string) ([]byte, error) {
 	if strings.HasPrefix(schemaURL, "http://") || strings.HasPrefix(schemaURL, "https://") {
-		resp, httpErr := http.Get(schemaURL)
+		// Create a custom HTTP client with timeout
+		client := &http.Client{
+			Timeout: 30 * time.Second, // 30 second timeout
+		}
+		
+		// Use the client to make the request
+		resp, httpErr := client.Get(schemaURL)
 		if httpErr != nil {
 			return nil, fmt.Errorf("failed to fetch schema from URL: %v", httpErr)
 		}
@@ -1013,4 +1118,20 @@ func getHostFromURL(urlStr string) (string, error) {
 		return "", err
 	}
 	return parsedURL.Hostname(), nil
+}
+
+// Add a context key to store schema bytes
+type schemaBytesContextKey struct{}
+
+// Config represents a configuration for SSE
+type Config struct {
+	SchemaURL string
+	BaseURL   string
+	Headers   map[string]string
+	Filters   []string
+}
+
+// ConfigLoader is an interface for loading configurations by ID
+type ConfigLoader interface {
+	LoadConfig(ctx context.Context, id string) (*Config, error)
 }

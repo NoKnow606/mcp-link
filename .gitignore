@@ -1,4 +1,63 @@
+# IDE 和编辑器配置
 .DS_Store
 .idea
 .vscode
 node_modules
+
+# Go 特定文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# 二进制文件
+/bin/
+/dist/
+/build/
+/mcp-link
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+/tmp/
+/temp/
+
+# Docker 相关
+.docker/
+docker-compose.override.yml
+*.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 编译缓存
+/.cache/
+
+# 依赖和包管理
+/vendor/
+
+# 配置文件
+*.local.yaml
+*.local.yml
+*.local.json
+config.local.*
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 私钥和敏感信息
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+/certs/

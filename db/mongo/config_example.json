@@ -1,0 +1,15 @@
+{
+  "URI": "mongodb://localhost:47017",
+  "Database": "mcp_link_db",
+  "Username": "",
+  "Password": "",
+  "AuthDatabase": "admin",
+  "ReplicaSet": "",
+  "MaxPoolSize": 100,
+  "MinPoolSize": 0,
+  "ConnectTimeout": 30,
+  "SocketTimeout": 30,
+  "ServerSelectionTimeout": 30,
+  "HeartbeatInterval": 10,
+  "LocalThreshold": 15
+} 

@@ -195,7 +195,7 @@ func NewToolHandler(method string, url string, extraHeaders map[string]string) f
 func NewMCPFromCustomParser(baseURL string, extraHeaders map[string]string, parser OpenAPIParser) (*server.MCPServer, error) {
 	// Create a new MCP server
 	apiInfo := parser.Info()
-	prefix := "mcplink_" + sanitizeToolName(apiInfo.Title)
+	prefix := "omnimcp" + sanitizeToolName(apiInfo.Title)
 
 	s := server.NewMCPServer(
 		prefix,
