@@ -358,6 +358,7 @@ func (s *SSEServer) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Parse message as raw JSON
 	var rawMessage json.RawMessage
+	s.logMessage("[MESSAGE] Sending message to client: %s", string(rawMessage))
 	if err := json.NewDecoder(r.Body).Decode(&rawMessage); err != nil {
 		s.logMessage("[ERROR] Parse error for session %s: %v", sessionID, err)
 		s.writeJSONRPCError(w, nil, mcp.PARSE_ERROR, "Parse error")
