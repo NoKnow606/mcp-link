@@ -376,6 +376,7 @@ func (s *SSEServer) handleMessage(w http.ResponseWriter, r *http.Request) {
 			if hasParams {
 				// For non-list methods, log detailed parameters
 				paramsJSON, err := json.Marshal(params)
+				s.logMessage("[MCP TOOL CALL NO List] Request params: %s", string(paramsJSON))
 				if err == nil {
 					s.logMessage("[MCP TOOL CALL] Session %s: Method: %s, Params: %s", sessionID, method, string(paramsJSON))
 				} else {

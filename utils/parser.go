@@ -198,8 +198,6 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 				Responses: make(map[string]Response),
 			}
 
-			fmt.Println("endpoint:", endpoint)
-
 			if summary, ok := operationObj["summary"].(string); ok {
 				endpoint.Summary = summary
 			}
@@ -308,8 +306,6 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 					}
 				}
 			}
-
-			fmt.Println("endpoint end:", endpoint)
 
 			endpoints = append(endpoints, endpoint)
 		}
