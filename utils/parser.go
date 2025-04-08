@@ -198,6 +198,8 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 				Responses: make(map[string]Response),
 			}
 
+			fmt.Println("endpoint:", endpoint)
+
 			if summary, ok := operationObj["summary"].(string); ok {
 				endpoint.Summary = summary
 			}
@@ -214,6 +216,8 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 			if parameters, ok := operationObj["parameters"].([]interface{}); ok {
 				for _, param := range parameters {
 					paramObj, ok := param.(map[string]interface{})
+					fmt.Println("param:", paramObj)
+					fmt.Println("ok:", ok)
 					if !ok {
 						continue
 					}
@@ -304,6 +308,8 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 					}
 				}
 			}
+
+			fmt.Println("endpoint end:", endpoint)
 
 			endpoints = append(endpoints, endpoint)
 		}

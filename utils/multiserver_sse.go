@@ -818,19 +818,19 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ssePath != "" && path == ssePath {
 		s.logMessage("[REQUEST] SSE connection request from %s", r.RemoteAddr)
 
-		// Check if configId is provided - this is for backward compatibility with /sse/config endpoint
+		// Check if a config ID is provided
 		configID := r.URL.Query().Get("configId")
 		if configID != "" {
 			s.logMessage("[CONFIG ID] Using config ID: %s", configID)
-			
-			// Get the database client from context
+
+			// Get MongoDB client
 			mongoClient, err := mongo.GetDefaultClient()
 			if err != nil {
 				s.logMessage("[ERROR] Failed to get MongoDB client: %v", err)
 				http.Error(w, fmt.Sprintf("Failed to get MongoDB client: %v", err), http.StatusInternalServerError)
 				return
 			}
-			
+
 			// Create repository and service
 			sseConfigRepo, err := repositories.NewSSEConfigRepository(mongoClient)
 			if err != nil {
@@ -838,9 +838,9 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, fmt.Sprintf("Failed to create SSE config repository: %v", err), http.StatusInternalServerError)
 				return
 			}
-			
+
 			sseConfigService := services.NewSSEConfigService(sseConfigRepo)
-			
+
 			// Get the configuration from database
 			config, err := sseConfigService.GetByID(r.Context(), configID)
 			if err != nil {
@@ -848,7 +848,21 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, fmt.Sprintf("Failed to get configuration: %v", err), http.StatusInternalServerError)
 				return
 			}
-			
+
+			// Check if config is nil
+			if config == nil {
+				s.logMessage("[ERROR] Configuration not found for ID: %s", configID)
+				http.Error(w, fmt.Sprintf("Configuration not found for ID: %s", configID), http.StatusNotFound)
+				return
+			}
+
+			// Check if SchemaURL is empty
+			if config.SchemaURL == "" {
+				s.logMessage("[ERROR] SchemaURL is empty in configuration with ID: %s", configID)
+				http.Error(w, "Invalid configuration: SchemaURL is empty", http.StatusInternalServerError)
+				return
+			}
+
 			// Get schema content
 			schemaBytes, err := sseConfigService.GetSchemaBytes(config.SchemaURL)
 			if err != nil {
@@ -856,51 +870,78 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, fmt.Sprintf("Failed to get schema content: %v", err), http.StatusInternalServerError)
 				return
 			}
-			
+
+			// Check if schemaBytes is nil or empty
+			if schemaBytes == nil || len(schemaBytes) == 0 {
+				s.logMessage("[ERROR] Empty schema content for URL: %s", config.SchemaURL)
+				http.Error(w, "Empty schema content", http.StatusInternalServerError)
+				return
+			}
+
 			// Create a new context with the schema bytes
 			ctx := context.WithValue(r.Context(), schemaBytesContextKey{}, schemaBytes)
 			r = r.WithContext(ctx)
-			
+
 			// Set parameters in the query
 			q := r.URL.Query()
 			q.Set("s", config.SchemaURL)
-			q.Set("u", config.BaseURL)
-			
+
+			// Check if BaseURL is empty
+			if config.BaseURL == "" {
+				s.logMessage("[WARNING] BaseURL is empty in configuration with ID: %s, using default", configID)
+				// Set a reasonable default or use an empty string
+			} else {
+				q.Set("u", config.BaseURL)
+			}
+
 			// Convert headers to JSON
-			headersJSON, err := json.Marshal(config.Headers)
-			if err == nil {
-				q.Set("h", string(headersJSON))
+			if config.Headers != nil {
+				headersJSON, err := json.Marshal(config.Headers)
+				if err == nil {
+					q.Set("h", string(headersJSON))
+				} else {
+					s.logMessage("[WARNING] Failed to marshal headers: %v", err)
+				}
 			}
-			
+
 			// Add filters if any
-			for _, filter := range config.Filters {
-				q.Add("f", filter)
+			if config.Filters != nil {
+				for _, filter := range config.Filters {
+					q.Add("f", filter)
+				}
 			}
-			
+
 			// Create an encoded parameters object
 			paramsObj := map[string]interface{}{
 				"s": config.SchemaURL,
-				"u": config.BaseURL,
-				"h": config.Headers,
 			}
-			
-			if len(config.Filters) > 0 {
+
+			if config.BaseURL != "" {
+				paramsObj["u"] = config.BaseURL
+			}
+
+			if config.Headers != nil {
+				paramsObj["h"] = config.Headers
+			}
+
+			if config.Filters != nil && len(config.Filters) > 0 {
 				paramsObj["f"] = strings.Join(config.Filters, ";")
 			}
-			
+
 			// Encode the params as JSON and then base64
 			paramsJSON, _ := json.Marshal(paramsObj)
 			encodedParams := base64.StdEncoding.EncodeToString(paramsJSON)
-			
+
 			// Add the encoded params as 'code' param
 			q.Set("code", encodedParams)
-			
+
 			// Set the modified query
 			r.URL.RawQuery = q.Encode()
 		}
 
 		// Parse request parameters
 		params := s.parseRequestParams(r)
+
 		if params.Error != nil {
 			s.logMessage("[ERROR] Failed to parse request parameters: %v", params.Error)
 			http.Error(w, fmt.Sprintf("Failed to parse request parameters: %v", params.Error), http.StatusInternalServerError)
@@ -944,6 +985,7 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				BaseParser: parser,
 				Filters:    params.Filters,
 			}
+			s.logMessage("[FILTERS] Applying filters to API endpoints: %v", parser)
 		}
 
 		var err error
@@ -1053,7 +1095,7 @@ func getSchemaURL(schemaURL string) ([]byte, error) {
 		client := &http.Client{
 			Timeout: 30 * time.Second, // 30 second timeout
 		}
-		
+
 		// Use the client to make the request
 		resp, httpErr := client.Get(schemaURL)
 		if httpErr != nil {
