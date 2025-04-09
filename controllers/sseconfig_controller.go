@@ -20,19 +20,20 @@ type SSEConfigController struct {
 
 // CreateConfigRequest represents the request structure for creating a configuration
 type CreateConfigRequest struct {
-	SchemaURL string            `json:"schemaURL"`
-	BaseURL   string            `json:"baseURL"`
-	Headers   map[string]string `json:"headers"`
-	Filters   []string          `json:"filters"`
+	ApiConfigId string            `json:"apiConfigId"`
+	SchemaURL   string            `json:"schemaURL"`
+	BaseURL     string            `json:"baseURL"`
+	Headers     map[string]string `json:"headers"`
+	Filters     []string          `json:"filters"`
 }
 
 // ConfigResponse represents the response structure for configuration operations
 type ConfigResponse struct {
-	ID        string `json:"id,omitempty"`
-	SSEUrl    string `json:"sseUrl,omitempty"`
-	Message   string `json:"message,omitempty"`
-	Error     string `json:"error,omitempty"`
-	Status    bool   `json:"status"`
+	ID      string `json:"id,omitempty"`
+	SSEUrl  string `json:"sseUrl,omitempty"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Status  bool   `json:"status"`
 }
 
 // schemaBytesContextKey is used to store schema bytes in the request context
@@ -63,7 +64,7 @@ func (c *SSEConfigController) CreateConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Create configuration in database
-	id, err := c.service.Create(r.Context(), req.SchemaURL, req.BaseURL, req.Headers, req.Filters)
+	id, err := c.service.Create(r.Context(), req.ApiConfigId, req.SchemaURL, req.BaseURL, req.Headers, req.Filters)
 	if err != nil {
 		c.writeErrorResponse(w, "Failed to create configuration: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -205,13 +206,13 @@ func (c *SSEConfigController) SSEHandler(w http.ResponseWriter, r *http.Request)
 	// Set parameters directly in the request's URL query instead of using 'code' parameter
 	q := r.URL.Query()
 	q.Set("u", config.BaseURL)
-	
+
 	// Convert headers to JSON
 	headersJSON, err := json.Marshal(config.Headers)
 	if err == nil {
 		q.Set("h", string(headersJSON))
 	}
-	
+
 	// Add filters if any
 	for _, filter := range config.Filters {
 		q.Add("f", filter)
@@ -231,10 +232,10 @@ func (c *SSEConfigController) SSEHandler(w http.ResponseWriter, r *http.Request)
 	// Encode the params as JSON and then base64
 	paramsJSON, _ := json.Marshal(paramsObj)
 	encodedParams := base64.StdEncoding.EncodeToString(paramsJSON)
-	
+
 	// Add the encoded params as 'code' param
 	q.Set("code", encodedParams)
-	
+
 	// Set the modified query
 	r.URL.RawQuery = q.Encode()
 
@@ -244,7 +245,7 @@ func (c *SSEConfigController) SSEHandler(w http.ResponseWriter, r *http.Request)
 
 // buildSSEURL constructs the SSE URL with the configuration ID
 func (c *SSEConfigController) buildSSEURL(id string) string {
-	return c.sseBaseURL + "/sse/config?configId=" + id
+	return c.sseBaseURL + "/sse?configId=" + id
 }
 
 // writeErrorResponse writes an error response to the client

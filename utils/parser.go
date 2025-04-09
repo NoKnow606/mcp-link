@@ -214,8 +214,6 @@ func (p *SimpleOpenAPIParser) APIs() []APIEndpoint {
 			if parameters, ok := operationObj["parameters"].([]interface{}); ok {
 				for _, param := range parameters {
 					paramObj, ok := param.(map[string]interface{})
-					fmt.Println("param:", paramObj)
-					fmt.Println("ok:", ok)
 					if !ok {
 						continue
 					}

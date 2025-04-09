@@ -15,7 +15,8 @@ import (
 
 // SSEConfigService handles SSE configuration operations
 type SSEConfigService struct {
-	repo *repositories.SSEConfigRepository
+	repo                *repositories.SSEConfigRepository
+	apiServerConfigRepo repositories.APIServerConfigRepository
 }
 
 // NewSSEConfigService creates a new SSE configuration service
@@ -25,11 +26,40 @@ func NewSSEConfigService(repo *repositories.SSEConfigRepository) *SSEConfigServi
 	}
 }
 
+// NewSSEConfigServiceWithAPIRepo creates a new SSE configuration service with APIServerConfigRepository
+func NewSSEConfigServiceWithAPIRepo(repo *repositories.SSEConfigRepository, apiRepo repositories.APIServerConfigRepository) *SSEConfigService {
+	return &SSEConfigService{
+		repo:                repo,
+		apiServerConfigRepo: apiRepo,
+	}
+}
+
 // Create creates a new SSE configuration in the database
-func (s *SSEConfigService) Create(ctx context.Context, schemaURL, baseURL string, headers map[string]string, filters []string) (string, error) {
+func (s *SSEConfigService) Create(ctx context.Context, apiConfigId string, schemaURL, baseURL string, headers map[string]string, filters []string) (string, error) {
 	// Validate required fields
+	if apiConfigId == "" {
+		return "", errors.New("apiConfigId is required")
+	}
+
+	// 检查是否设置了apiServerConfigRepo
+	if s.apiServerConfigRepo != nil {
+		// 尝试从API服务器配置获取信息
+		apiConfig, err := s.apiServerConfigRepo.GetByID(ctx, apiConfigId)
+		if err == nil && apiConfig != nil {
+			// 如果 schemaURL 为空，则使用 API 服务器配置中的 schemaURL
+			if schemaURL == "" {
+				schemaURL = apiConfig.SchemaURL
+			}
+
+			if baseURL == "" {
+				baseURL = apiConfig.BaseURL
+			}
+		}
+	}
+
+	// 验证必须的字段
 	if schemaURL == "" {
-		return "", errors.New("schema URL is required")
+		return "", errors.New("schemaURL is required")
 	}
 
 	if baseURL == "" {
@@ -37,7 +67,7 @@ func (s *SSEConfigService) Create(ctx context.Context, schemaURL, baseURL string
 	}
 
 	// Create the configuration
-	config := models.NewSSEConfig(schemaURL, baseURL, headers, filters)
+	config := models.NewSSEConfig(apiConfigId, schemaURL, baseURL, headers, filters)
 
 	// Save to database
 	id, err := s.repo.Create(ctx, config)
@@ -92,17 +122,17 @@ func (s *SSEConfigService) GetSchemaBytes(schemaURL string) ([]byte, error) {
 		client := &http.Client{
 			Timeout: 30 * time.Second,
 		}
-		
+
 		// Use the client to make the request
 		resp, err := client.Get(schemaURL)
 		if err != nil {
 			return nil, err
 		}
 		defer resp.Body.Close()
-		
+
 		return io.ReadAll(resp.Body)
 	}
-	
+
 	// Local file
 	return os.ReadFile(schemaURL)
-} 
+}

@@ -9,13 +9,15 @@ import (
 
 // Router handles HTTP requests routing
 type Router struct {
-	sseConfigController *controllers.SSEConfigController
+	sseConfigController       *controllers.SSEConfigController
+	apiServerConfigController *controllers.APIServerConfigController
 }
 
 // NewRouter creates a new router instance
-func NewRouter(sseConfigController *controllers.SSEConfigController) *Router {
+func NewRouter(sseConfigController *controllers.SSEConfigController, apiServerConfigController *controllers.APIServerConfigController) *Router {
 	return &Router{
-		sseConfigController: sseConfigController,
+		sseConfigController:       sseConfigController,
+		apiServerConfigController: apiServerConfigController,
 	}
 }
 
@@ -35,7 +37,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Routes for SSE configuration API
-	if path == "/api/config" {
+	if path == "/api/v1/config" {
 		switch req.Method {
 		case http.MethodPost:
 			r.sseConfigController.CreateConfig(w, req)
@@ -51,7 +53,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Routes for specific configuration
-	if strings.HasPrefix(path, "/api/config/") && len(path) > 12 {
+	if strings.HasPrefix(path, "/api/v1/config/") && len(path) > 12 {
 		switch req.Method {
 		case http.MethodGet:
 			r.sseConfigController.GetConfig(w, req)
@@ -68,12 +70,45 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Route for SSE connections with configuration ID
-	if path == "/sse/config" {
-		r.sseConfigController.SSEHandler(w, req)
-		return
+	// Routes for API server configuration
+	if path == "/api/v1/api-server/config" {
+		switch req.Method {
+		case http.MethodPost:
+			r.apiServerConfigController.CreateAPIServerConfig(w, req)
+			return
+		case http.MethodGet:
+			// Get all configurations
+			// 假设URL路径为 /api/server-config?all=true
+			if req.URL.Query().Get("all") == "true" {
+				r.apiServerConfigController.GetAPIServerConfig(w, req)
+				return
+			}
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+	}
+
+	// Routes for specific API server configuration
+	if strings.HasPrefix(path, "/api/v1/api-server/config/") && len(path) > 19 {
+		switch req.Method {
+		case http.MethodGet:
+			r.apiServerConfigController.GetAPIServerConfig(w, req)
+			return
+		case http.MethodPut:
+			r.apiServerConfigController.UpdateAPIServerConfig(w, req)
+			return
+		case http.MethodDelete:
+			r.apiServerConfigController.DeleteAPIServerConfig(w, req)
+			return
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 	}
 
 	// If no routes match, return 404
 	http.NotFound(w, req)
-} 
+}
