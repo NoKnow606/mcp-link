@@ -48,15 +48,9 @@ func main() {
 					},
 					&cli.StringFlag{
 						Name:    "mongodb-database",
-						Value:   "ominmcp",
+						Value:   "omnimcp",
 						Usage:   "MongoDB database name",
 						EnvVars: []string{"MONGODB_DATABASE"},
-					},
-					&cli.StringFlag{
-						Name:    "base-url",
-						Value:   "http://localhost:8080",
-						Usage:   "Base URL for the server",
-						EnvVars: []string{"BASE_URL"},
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -70,7 +64,8 @@ func main() {
 						return fmt.Errorf("failed to initialize MongoDB: %w", err)
 					}
 
-					return runServer(c.String("host"), c.Int("port"), c.String("base-url"))
+					// 初始化API服务器配置
+					return runServer(c.String("host"), c.Int("port"))
 				},
 			},
 		},
@@ -81,9 +76,11 @@ func main() {
 	}
 }
 
-func runServer(host string, port int, baseURL string) error {
+func runServer(host string, port int) error {
 	// Create server address
 	addr := fmt.Sprintf("%s:%d", host, port)
+
+	baseURL := fmt.Sprintf("http://%s", addr)
 
 	// Configure the SSE server
 	ss := utils.NewSSEServer()
@@ -94,28 +91,39 @@ func runServer(host string, port int, baseURL string) error {
 		return fmt.Errorf("failed to get MongoDB client: %w", err)
 	}
 
-	// Initialize repository
+	// Initialize API server config repository (先初始化它，因为SSE服务需要用到它)
+	apiServerConfigRepo, err := repositories.NewAPIServerConfigRepository(mongoClient)
+	if err != nil {
+		return fmt.Errorf("failed to create API server config repository: %w", err)
+	}
+
+	// Initialize SSE config repository
 	sseConfigRepo, err := repositories.NewSSEConfigRepository(mongoClient)
 	if err != nil {
 		return fmt.Errorf("failed to create SSE config repository: %w", err)
 	}
 
-	// Initialize service
-	sseConfigService := services.NewSSEConfigService(sseConfigRepo)
+	// Initialize SSE config service with API server config repository
+	sseConfigService := services.NewSSEConfigServiceWithAPIRepo(sseConfigRepo, apiServerConfigRepo)
 
-	// Initialize controller
+	// Initialize SSE config controller
 	sseConfigController := controllers.NewSSEConfigController(sseConfigService, ss, baseURL)
 
-	// Initialize router
-	apiRouter := router.NewRouter(sseConfigController)
+	// Initialize API server config service
+	apiServerConfigService := services.NewAPIServerConfigService(apiServerConfigRepo)
+
+	// Initialize API server config controller
+	apiServerConfigController := controllers.NewAPIServerConfigController(apiServerConfigService)
+
+	// Initialize router with both controllers
+	apiRouter := router.NewRouter(sseConfigController, apiServerConfigController)
 
 	// Create HTTP server with CORS middleware and router
 	mux := http.NewServeMux()
-	mux.Handle("/api/", corsMiddleware(apiRouter))
-	mux.Handle("/sse/config", corsMiddleware(apiRouter))
+	mux.Handle("/api/v1/", corsMiddleware(apiRouter))
 	mux.Handle("/sse", corsMiddleware(ss))
 	mux.Handle("/message", corsMiddleware(ss))
-	
+
 	// 添加健康检查端点
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		// 检查 MongoDB 连接状态
@@ -124,19 +132,20 @@ func runServer(host string, port int, baseURL string) error {
 			http.Error(w, "Database connection error", http.StatusServiceUnavailable)
 			return
 		}
-		
+
 		// 尝试 ping MongoDB
 		if err := mongoClient.Ping(r.Context()); err != nil {
 			http.Error(w, "Database ping failed", http.StatusServiceUnavailable)
 			return
 		}
-		
+
 		// 返回成功状态
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","message":"Service is healthy"}`))
 	})
 
+	// 设置HTTP服务器配置
 	server := &http.Server{
 		Addr:    addr,
 		Handler: mux,
@@ -148,7 +157,7 @@ func runServer(host string, port int, baseURL string) error {
 
 	// Start server in a goroutine
 	go func() {
-		fmt.Printf("Starting server on %s\n", addr)
+		fmt.Printf("Starting server on %s with base URL %s\n", addr, baseURL)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Error starting server: %v\n", err)
 		}

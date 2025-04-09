@@ -17,7 +17,6 @@ There is a notable gap in the current AI Agent ecosystem:
 
 MCP Link solves these issues through automation and standardization, allowing any API to easily join the AI-driven application ecosystem.
 
-
 ## 🌟 Key Features
 
 - **Automatic Conversion**: Generate complete MCP Servers based on OpenAPI Schema
@@ -26,34 +25,139 @@ MCP Link solves these issues through automation and standardization, allowing an
 - **Zero Code Modification**: Obtain MCP compatibility without modifying the original API implementation
 - **Open Standard**: Follow the MCP specification to ensure compatibility with various AI Agent frameworks
 
-
 ## 🌐 Online Version
 
 Try our hosted version at [mcp-link.vercel.app](https://mcp-link.vercel.app) to quickly convert and test your APIs without installation.
 
+## 🔧 Installation and Setup
 
-## 🚀 Quick Start
+### Prerequisites
 
-### Installation
+Before installing MCP Link, make sure you have the following prerequisites:
+
+1. **Go Installation**: MCP Link requires Go 1.18 or later.
+   ```bash
+   # Check if Go is installed and which version
+   go version
+   
+   # If not installed, download and install from https://golang.org/dl/
+   # Then verify installation
+   go version
+   ```
+
+2. **MongoDB**: MCP Link uses MongoDB for persistent storage.
+   ```bash
+   # For local development, you can use Docker
+   docker run --name mongodb -d -p 47017:27017 mongo:latest
+   
+   # Or install MongoDB directly on your system:
+   # https://docs.mongodb.com/manual/installation/
+   ```
+
+### Clone Repository
 
 ```bash
 # Clone repository
 git clone https://github.com/automation-ai-labs/mcp-link.git
-cd mcp-openapi-to-mcp-adapter
-
-# Install dependencies
-go mod download
+cd mcp-link
 ```
 
-### Running
+### Install Dependencies
 
 ```bash
-# Specify port
+# Download all required Go modules
+go mod download
+
+# Verify dependencies
+go mod verify
+```
+
+## ⚙️ Configuration
+
+MCP Link can be configured using environment variables or command-line flags.
+
+### Environment Variables
+
+You can create a `.env` file in the project root directory with the following variables:
+
+```
+MONGODB_URI=mongodb://localhost:47017
+MONGODB_DATABASE=ominmcp
+BASE_URL=http://localhost:8080
+API_SERVER_HOST=localhost
+API_SERVER_PORT=8080
+API_SERVER_ENABLE_CORS=true
+```
+
+### Command-line Flags
+
+When running the server, you can provide configuration using command-line flags:
+
+```bash
+go run main.go serve --port 8080 --host localhost --mongodb-uri mongodb://localhost:47017 --mongodb-database ominmcp --base-url http://localhost:8080
+```
+
+## 🚀 Running the Application
+
+### Development Mode
+
+For development purposes, you can run the application directly using Go:
+
+```bash
+# Run with default settings
+go run main.go serve
+
+# Or specify custom port and host
 go run main.go serve --port 8080 --host 0.0.0.0
 ```
 
+### Building for Production
+
+To build the application for production deployment:
+
+```bash
+# Build the binary
+go build -o mcp-link
+
+# Make it executable (Linux/macOS)
+chmod +x mcp-link
+
+# Run the compiled binary
+./mcp-link serve
+```
+
+## 📦 Docker Deployment
+
+MCP Link can be easily deployed using Docker:
+
+### Using Docker Compose
+
+1. Edit the `docker-compose.yml` file to configure your environment.
+2. Run Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+### Building Docker Image Manually
+
+```bash
+# Build the Docker image
+docker build -t mcp-link .
+
+# Run the container
+docker run -d -p 8080:8080 \
+  -e MONGODB_URI=mongodb://mongo:27017 \
+  -e MONGODB_DATABASE=ominmcp \
+  -e BASE_URL=http://localhost:8080 \
+  --name mcp-link mcp-link
+```
+
+## 🔄 Using MCP Link
 
 ### Parameter Description
+
+When using the SSE endpoint, the following parameters are available:
 
 - `s=` - URL of the OpenAPI specification file
 - `u=` - Base URL of the target API
@@ -66,18 +170,19 @@ go run main.go serve --port 8080 --host 0.0.0.0
   - Wildcards: `*` matches any single path segment, `**` matches zero or more segments
 
 ### Examples
-| _ | API | MCP Link URL | Authentication Method |
-|------|-----|-------------|---------|
-| ![Brave](https://img.logo.dev/brave.com) | Brave Search | https://mcp-link.vercel.app/links/brave | API Key |
-| ![DuckDuckGo](https://img.logo.dev/duckduckgo.com) | DuckDuckGo | https://mcp-link.vercel.app/links/duckduckgo | None |
-| ![Figma](https://img.logo.dev/figma.com) | Figma | https://mcp-link.vercel.app/links/figma | API Token |
-| ![GitHub](https://img.logo.dev/github.com) | GitHub | https://mcp-link.vercel.app/links/github | Bearer Token |
-| ![Home Assistant](https://img.logo.dev/home-assistant.io) | Home Assistant | https://mcp-link.vercel.app/links/homeassistant | Bearer Token |
-| ![Notion](https://img.logo.dev/notion.so) | Notion | https://mcp-link.vercel.app/links/notion | Bearer Token |
-| ![Slack](https://img.logo.dev/slack.com) | Slack | https://mcp-link.vercel.app/links/slack | Bearer Token |
-| ![Stripe](https://img.logo.dev/stripe.com) | Stripe | https://mcp-link.vercel.app/links/stripe | Bearer Token |
-| ![TMDB](https://img.logo.dev/themoviedb.org) | TMDB | https://mcp-link.vercel.app/links/tmdb | Bearer Token |
-| ![YouTube](https://img.logo.dev/youtube.com) | YouTube | https://mcp-link.vercel.app/links/youtube | Bearer Token |
+
+| API | MCP Link URL | Authentication Method |
+|-----|-------------|---------|
+| ![Brave](https://img.logo.dev/brave.com) | https://mcp-link.vercel.app/links/brave | API Key |
+| ![DuckDuckGo](https://img.logo.dev/duckduckgo.com) | https://mcp-link.vercel.app/links/duckduckgo | None |
+| ![Figma](https://img.logo.dev/figma.com) | https://mcp-link.vercel.app/links/figma | API Token |
+| ![GitHub](https://img.logo.dev/github.com) | https://mcp-link.vercel.app/links/github | Bearer Token |
+| ![Home Assistant](https://img.logo.dev/home-assistant.io) | https://mcp-link.vercel.app/links/homeassistant | Bearer Token |
+| ![Notion](https://img.logo.dev/notion.so) | https://mcp-link.vercel.app/links/notion | Bearer Token |
+| ![Slack](https://img.logo.dev/slack.com) | https://mcp-link.vercel.app/links/slack | Bearer Token |
+| ![Stripe](https://img.logo.dev/stripe.com) | https://mcp-link.vercel.app/links/stripe | Bearer Token |
+| ![TMDB](https://img.logo.dev/themoviedb.org) | https://mcp-link.vercel.app/links/tmdb | Bearer Token |
+| ![YouTube](https://img.logo.dev/youtube.com) | https://mcp-link.vercel.app/links/youtube | Bearer Token |
 
 ### Usage in AI Agents
 
@@ -93,22 +198,16 @@ go run main.go serve --port 8080 --host 0.0.0.0
 
 These URLs allow any API with an OpenAPI specification to be immediately converted into an MCP-compatible interface accessible to AI Agents.
 
-## 📋 Future Development
+## 💾 Using Persistent Configuration
 
-- **MCP Protocol OAuthflow**: Implement OAuth authentication flow support for MCP Protocol
-- **Resources Support**: Add capability to handle resource-based API interactions
-- **MIME Types**: Enhance support for various MIME types in API requests and responses
+MCP Link supports persistent storage of SSE configurations through MongoDB, allowing you to create a configuration once and reference it by ID without passing complete configuration parameters each time.
 
-## 🔄 使用持久化的配置
+### Creating a Configuration
 
-现在，MCP Link 支持通过 MongoDB 持久化存储 SSE 配置。这使您可以一次性创建配置，然后通过配置 ID 引用它，无需每次都传递完整的配置参数。
-
-### 创建配置
-
-首先，使用 API 创建配置：
+First, create a configuration using the API:
 
 ```bash
-curl -X POST "http://localhost:8080/api/config" \
+curl -X POST "http://localhost:8080/api/v1/config" \
   -H "Content-Type: application/json" \
   -d '{
     "schemaURL": "https://petstore3.swagger.io/api/v3/openapi.json",
@@ -124,7 +223,7 @@ curl -X POST "http://localhost:8080/api/config" \
   }'
 ```
 
-创建成功后，您将收到配置 ID 和 SSE URL：
+Upon successful creation, you'll receive a configuration ID and SSE URL:
 
 ```json
 {
@@ -135,23 +234,23 @@ curl -X POST "http://localhost:8080/api/config" \
 }
 ```
 
-### 使用配置 ID
+### Using Configuration by ID
 
-您可以使用以下两种方式之一通过配置 ID 访问 SSE 服务：
+You can access the SSE service using the configuration ID in either of two ways:
 
-1. 使用专用的配置端点：
+1. Using the dedicated configuration endpoint:
    ```
    http://localhost:8080/sse/config?configId=645f8a1b2c3d4e5f6a7b8c9d
    ```
 
-2. 使用兼容的标准 SSE 端点：
+2. Using the compatible standard SSE endpoint:
    ```
    http://localhost:8080/sse?configId=645f8a1b2c3d4e5f6a7b8c9d
    ```
 
-### 在 AI 代理中使用
+### Usage in AI Agents
 
-在 AI 代理配置中使用 SSE URL：
+Use the SSE URL in your AI agent configuration:
 
 ```json
 {
@@ -163,8 +262,59 @@ curl -X POST "http://localhost:8080/api/config" \
 }
 ```
 
-### 管理配置
+### Managing Configurations
 
-- 获取配置详情：`GET /api/config/{id}`
-- 更新配置：`PUT /api/config/{id}`
-- 删除配置：`DELETE /api/config/{id}`
+- Get configuration details: `GET /api/v1/config/{id}`
+- Update configuration: `PUT /api/v1/config/{id}`
+- Delete configuration: `DELETE /api/v1/config/{id}`
+
+## 📋 Future Development
+
+- **MCP Protocol OAuthflow**: Implement OAuth authentication flow support for MCP Protocol
+- **Resources Support**: Add capability to handle resource-based API interactions
+- **MIME Types**: Enhance support for various MIME types in API requests and responses
+
+## 🔍 API Server Configuration
+
+MCP Link now includes API server configuration functionality, allowing you to manage multiple API servers and their configurations.
+
+### Creating an API Server Configuration
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/api-server/config" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Pet Store API",
+    "description": "Swagger Petstore API",
+    "schemaUrl": "https://petstore3.swagger.io/api/v3/openapi.json",
+    "baseUrl": "https://petstore3.swagger.io/"
+  }'
+```
+
+### Managing API Server Configurations
+
+- List all configurations: `GET /api/v1/api-server/config?all=true`
+- Get configuration by ID: `GET /api/v1/api-server/config/{id}`
+- Update configuration: `PUT /api/v1/api-server/config/{id}`
+- Delete configuration: `DELETE /api/v1/api-server/config/{id}`
+
+## 🛠️ Health Check Endpoint
+
+MCP Link provides a health check endpoint to verify the application status:
+
+```
+GET /health
+```
+
+A successful response indicates that the application is running and connected to MongoDB:
+
+```json
+{
+  "status": "ok",
+  "message": "Service is healthy"
+}
+```
+
+## 📄 License
+
+[Apache 2.0](LICENSE)
