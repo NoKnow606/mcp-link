@@ -1,0 +1,531 @@
+openapi: 3.0.0
+info:
+  title: API Documentation | Footprint Monitor APP
+  description: REST API Specification Document, Footprint Monitor APP API is used to configure Channels (including wallet address lists, event filters, and descriptions) and monitor activities of wallet addresses in DEX transactions that the Channel follows.\nIf you need to track the latest activities of specific wallet addresses on the blockchain, we provide the Footprint Monitor APP API to create Channels and configure the wallet addresses you want to follow. You can also set event filters to screen events you are interested in, and monitor the latest activities of wallet addresses in DEX transactions through the dex_trades interface.
+  version: 1.0.0
+servers:
+  - url: https://footprint-monitor.footprint.network
+    description: Production Environment
+
+paths:
+  /api/v1/monitor/channels:
+    get:
+      summary: Get All Channels
+      description: Get a list of all channels, supports pagination
+      operationId: getAllChannels
+      parameters:
+        - name: page
+          in: query
+          description: Page number (starting from 1)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Records per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Successfully retrieved channel list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelListResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/monitor/channel:
+    post:
+      summary: Create New Channel
+      description: |
+        Create a new monitoring channel. The `filters` attribute allows defining event-related filtering conditions. Each filter is an `EventFilter` object containing:
+        - `event_type`: Specifies the type of event, either `sell` or `buy`.
+        - `filter`: A two-dimensional array representing complex filtering conditions.
+          - The first dimension uses OR logic, and the second dimension uses AND logic.
+          - Each `Filter` object within defines a specific condition with a field (e.g., `volume_24h`, `marketcap`), an operator (e.g., `>`, `>=`, `<`, `<=`, `=`), and a comparison value.
+        These filters are used to screen specific event types and conditions when monitoring blockchain transactions.
+      operationId: createChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelInput'
+      responses:
+        '201':
+          description: Channel created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateChannelResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/monitor/channel/{id}:
+    get:
+      summary: Get Single Channel
+      description: Get detailed information of a specific channel by ID
+      operationId: getChannelById
+      parameters:
+        - name: id
+          in: path
+          description: Channel ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved channel information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update Channel
+      description: Update information of a specific channel by ID
+      operationId: updateChannel
+      parameters:
+        - name: id
+          in: path
+          description: Channel ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelInput'
+      responses:
+        '200':
+          description: Channel updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateChannelResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete Channel
+      description: Delete a specific channel by ID (soft delete)
+      operationId: deleteChannel
+      parameters:
+        - name: id
+          in: path
+          description: Channel ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteChannelResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/monitor/channel/{id}/dex-trades:
+    get:
+      summary: Get DEX Trades Associated with Channel
+      description: Get DEX transaction data related to a channel ID, supports various filtering conditions and pagination
+      operationId: getDexTradesByChannel
+      parameters:
+        - name: id
+          in: path
+          description: Channel ID
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number (starting from 1)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Records per page
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: address_list
+          in: query
+          description: Wallet address list filter (can be specified multiple times)
+          schema:
+            type: array
+            items:
+              type: string
+          explode: true
+        - name: event_type
+          in: query
+          description: Event type filter (buy/sell)
+          schema:
+            type: string
+            enum: [buy, sell]
+        - name: start_time
+          in: query
+          description: Start time filter (ISO 8601 format)
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          description: End time filter (ISO 8601 format)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Successfully retrieved DEX transaction data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DexTradeListResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    # Base Model Definitions
+    Filter:
+      type: object
+      required:
+        - field
+        - operator
+        - value
+      properties:
+        field:
+          type: string
+          description: Filter field
+          enum: [volume_24h, marketcap]
+        operator:
+          type: string
+          description: Comparison operator
+          enum: [">", ">=", "<", "<=", "="]
+        value:
+          type: number
+          description: Comparison value
+        unit:
+          type: string
+          description: Value unit
+          default: USD
+
+    EventFilter:
+      type: object
+      required:
+        - event_type
+        - filter
+      properties:
+        event_type:
+          type: string
+          description: Event type
+          enum: [sell, buy]
+        filter:
+          type: array
+          description: Two-dimensional array of filters (first dimension is OR, second dimension is AND)
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Filter'
+
+    Channel:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: Unique channel ID (auto-increment)
+        user_id:
+          type: string
+          description: User ID
+        name:
+          type: string
+          description: Channel name
+        address_list:
+          type: array
+          description: Address list (maximum 100)
+          items:
+            type: string
+        filters:
+          type: array
+          description: List of event filters
+          items:
+            $ref: '#/components/schemas/EventFilter'
+        description:
+          type: string
+          description: Channel description
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation time
+        updatedAt:
+          type: string
+          format: date-time
+          description: Update time
+        deleted:
+          type: boolean
+          description: Soft delete flag
+          default: false
+
+    ChannelInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Channel name
+        address_list:
+          type: array
+          description: Address list (maximum 100)
+          items:
+            type: string
+        filters:
+          type: array
+          description: List of event filters
+          items:
+            $ref: '#/components/schemas/EventFilter'
+        description:
+          type: string
+          description: Channel description
+
+    DexTrade:
+      type: object
+      required:
+        - channel_ids
+        - chain
+        - type
+        - tx_id
+        - token_address
+        - wallet_address
+        - wallet_labels
+        - token_name
+        - token_symbol
+        - amount
+        - timestamp
+        - value_usd
+        - token_price
+        - marketcap
+        - block_timestamp
+        - volume_24h
+      properties:
+        channel_ids:
+          type: array
+          description: List of associated channel IDs
+          items:
+            type: integer
+        chain:
+          type: string
+          description: Blockchain network
+        type:
+          type: string
+          description: Transaction type (buy/sell)
+          enum: [buy, sell]
+        tx_id:
+          type: string
+          description: Transaction hash
+        token_address:
+          type: string
+          description: Token contract address
+        wallet_address:
+          type: string
+          description: Wallet address
+        wallet_labels:
+          type: array
+          description: List of wallet labels
+          items:
+            type: string
+        token_name:
+          type: string
+          description: Token name
+        token_symbol:
+          type: string
+          description: Token symbol
+        amount:
+          type: number
+          description: Transaction amount
+        timestamp:
+          type: string
+          format: date-time
+          description: Transaction time
+        value_usd:
+          type: number
+          description: Transaction value in USD
+        token_price:
+          type: number
+          description: Token price
+        marketcap:
+          type: number
+          description: Market capitalization
+        block_timestamp:
+          type: string
+          format: date-time
+          description: Block timestamp
+        volume_24h:
+          type: number
+          description: 24-hour trading volume
+
+    # Response Schemas
+    ChannelListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            channels:
+              type: array
+              items:
+                $ref: '#/components/schemas/Channel'
+            pagination:
+              type: object
+              properties:
+                currentPage:
+                  type: integer
+                totalPages:
+                  type: integer
+                limit:
+                  type: integer
+
+    ChannelResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Channel'
+
+    CreateChannelResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Creation successful
+        data:
+          $ref: '#/components/schemas/Channel'
+
+    UpdateChannelResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Updated successfully
+        data:
+          $ref: '#/components/schemas/Channel'
+
+    DeleteChannelResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Deleted successfully
+
+    DexTradeListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            trades:
+              type: array
+              items:
+                $ref: '#/components/schemas/DexTrade'
+            pagination:
+              type: object
+              properties:
+                currentPage:
+                  type: integer
+                totalPages:
+                  type: integer
+                limit:
+                  type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error description
+        message:
+          type: string
+          description: Detailed error message
